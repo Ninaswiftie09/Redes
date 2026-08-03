@@ -120,6 +120,15 @@ public final class ReceptorFletcherTest {
             assertTrue(ReceptorFletcher.process(input).isUsable(), "Caso Hamming recibido utilizable");
         }
 
+        String[] multipleErrorsProvided = {
+            "HAMMING|0011011|4|0|BINARIO", "HAMMING|011110100110|8|0|BINARIO",
+            "HAMMING|10011001100001110111101101100010100001|32|0|ASCII"
+        };
+        for (String input : multipleErrorsProvided) {
+            assertFalse(ReceptorFletcher.process(input).isMalformed(),
+                    "Caso Hamming con múltiples errores se procesa sin excepción");
+        }
+
         ProcessingResult multipleErrors = ReceptorFletcher.process("HAMMING|0100111|4|0|BINARIO");
         assertFalse(multipleErrors.isMalformed(), "Dos errores Hamming no provocan excepción");
         // Sin paridad global, una trama con dos errores puede producir un síndrome engañoso.
