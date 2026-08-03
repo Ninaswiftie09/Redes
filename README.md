@@ -1,86 +1,43 @@
-# Laboratorio 2: receptor de control de errores
+# Laboratorio 2
 
 ## Integrantes
 
 - Nina Nájera Marakovits - 231088
 - Diego Ramirez - 23601
 
-El repositorio contiene el emisor en Python y un receptor de consola en Java. El
-receptor procesa una única línea y selecciona el algoritmo indicado por esa línea.
-No modifica el emisor.
+## Descripción
 
-## Algoritmos admitidos
+En este laboratorio se desarrollaron dos programas para simular la detección y corrección de errores durante el envío de información.
 
-- `HAMMING`: usa paridad par y posiciones contadas desde la izquierda. Corrige un
-  solo error de bit y después extrae los bits de información.
-- `FLETCHER8`, `FLETCHER16` y `FLETCHER32`: verifican el checksum como `SUMA2`
-  seguida de `SUMA1`. Detectan errores, pero no los corrigen; si el checksum no
-  coincide, descartan la trama.
+El emisor fue realizado en Python y el receptor en Java. Por el momento, la salida del emisor se copia y se pega manualmente en el receptor.
 
-Hamming no usa paridad global. Por ello, frente a dos o más alteraciones puede
-obtener un síndrome engañoso y no garantiza una detección o corrección confiable.
+## Algoritmos utilizados
 
-## Formato de entrada
+### Código de Hamming
 
-```text
-ALGORITMO|TRAMA|LONGITUD_ORIGINAL|PADDING|TIPO
-```
+Se utiliza para corregir errores. Agrega bits de paridad a la información y permite encontrar y corregir un bit incorrecto.
 
-- `ALGORITMO`: `HAMMING`, `FLETCHER8`, `FLETCHER16` o `FLETCHER32`.
-- `TRAMA`: bits recibidos; se conserva como texto para mantener ceros iniciales.
-- `LONGITUD_ORIGINAL`: longitud del mensaje sin paridad ni padding.
-- `PADDING`: para Fletcher son ceros agregados a la derecha antes del checksum;
-  para Hamming debe ser `0`.
-- `TIPO`: `BINARIO` o `ASCII`.
+### Fletcher Checksum
 
-En pruebas manuales, altere solamente un bit del campo `TRAMA`. No cambie el
-algoritmo, la longitud original, el padding ni el tipo.
+Se utiliza para detectar errores. Calcula un valor de verificación que se envía junto con el mensaje. El receptor vuelve a calcularlo y compara los resultados.
 
-## Requisitos y compilación
+Se incluyen las variantes:
 
-Se requiere Java 8 o superior. No se usan Maven, Gradle ni dependencias externas.
+- Fletcher-8
+- Fletcher-16
+- Fletcher-32
 
-Desde la raíz del repositorio, en PowerShell:
+## Funcionamiento
 
-```powershell
-$mainSources = Get-ChildItem src/main/java -Filter *.java | ForEach-Object FullName
-javac -encoding UTF-8 -d out $mainSources
-```
+1. El emisor recibe un mensaje binario o un texto.
+2. Convierte el mensaje a binario cuando es necesario.
+3. Aplica Hamming o Fletcher.
+4. Genera una trama con la información y los bits adicionales.
+5. La trama se copia y se ingresa en el receptor.
+6. El receptor verifica si existen errores.
+7. Hamming intenta corregir el error y Fletcher indica si la trama fue modificada.
 
-## Ejecución
+## Lenguajes utilizados
 
-El receptor lee una línea de la entrada estándar:
-
-```powershell
-"HAMMING|0110111|4|0|BINARIO" | java -cp out ReceptorFletcher
-```
-
-El ejemplo anterior informa síndrome `5`, corrige la trama a `0110011` y recupera
-`1011`.
-
-Ejemplo Fletcher válido:
-
-```powershell
-"FLETCHER16|010000010100000101000001|8|0|ASCII" | java -cp out ReceptorFletcher
-```
-
-Ejemplo Fletcher con error, que será descartado sin corrección:
-
-```powershell
-"FLETCHER16|010000010100000100000010|8|0|ASCII" | java -cp out ReceptorFletcher
-```
-
-## Pruebas
-
-Compile producción y pruebas, y ejecute la clase de pruebas:
-
-```powershell
-$mainSources = Get-ChildItem src/main/java -Filter *.java | ForEach-Object FullName
-$testSources = Get-ChildItem src/test/java -Filter *.java | ForEach-Object FullName
-javac -encoding UTF-8 -d out $mainSources $testSources
-java -cp out ReceptorFletcherTest
-```
-
-La suite cubre Hamming válido, corrección de un bit, ASCII, entradas inválidas,
-síndrome fuera de rango y la limitación ante múltiples errores; también mantiene
-las regresiones de Fletcher-8, Fletcher-16 y Fletcher-32.
+- Emisor: Python
+- Receptor: Java
