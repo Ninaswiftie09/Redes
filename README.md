@@ -1,4 +1,4 @@
-# Loop L2 - Spanning Tree Protocol
+# LSíntesis y Mapa Mental L3
 
 ## Integrantes
 
