@@ -196,7 +196,6 @@ src/network_server.py      manual custom MCP server and network tools
 src/config.py              environment and server configuration
 tests/                     unit and subprocess integration tests
 docs/                      editable report source
-output/pdf/                generated partial-delivery report
 ```
 
 ## References
