@@ -199,18 +199,6 @@ docs/                      editable report source
 output/pdf/                generated partial-delivery report
 ```
 
-## Current limitations and next delivery
-
-- The included custom server uses local stdio only.
-- Remote Streamable HTTP deployment is intentionally deferred.
-- Wireshark analysis and report section 9 are intentionally deferred.
-- Conversation context is kept in memory for the current process only.
-- Network results depend on local DNS, routing, firewall, and endpoint state.
-
-The second delivery should deploy the same custom service remotely, add the
-Streamable HTTP transport, capture the exchange in Wireshark, and complete report
-sections 8, 9, and 10 with the remote-server findings.
-
 ## References
 
 - [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25)
