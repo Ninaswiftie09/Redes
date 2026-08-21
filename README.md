@@ -1,6 +1,9 @@
-# UVG Manual MCP Network Assistant
+# Manual MCP Network Assistant
 
-A command-line chatbot for **CC3067 Networks - Project 1**. It connects Gemini to
+## Author 
+  Nina Nájera Marakovits - 231088
+
+A command-line chatbot for Networks. It connects Gemini to
 local Model Context Protocol (MCP) servers and implements the MCP client and the
 custom server manually with JSON-RPC 2.0. No MCP SDK is imported by the project
 code.
