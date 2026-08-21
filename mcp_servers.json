@@ -1,0 +1,30 @@
+{
+  "servers": {
+    "filesystem": {
+      "enabled": true,
+      "command": [
+        "{node}",
+        "{filesystem_server}",
+        "{workspace}"
+      ]
+    },
+    "git": {
+      "enabled": true,
+      "command": [
+        "{python}",
+        "-m",
+        "mcp_server_git",
+        "--repository",
+        "{workspace}"
+      ]
+    },
+    "network_ops": {
+      "enabled": true,
+      "command": [
+        "{python}",
+        "-m",
+        "src.network_server"
+      ]
+    }
+  }
+}
