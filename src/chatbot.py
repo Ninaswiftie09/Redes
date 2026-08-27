@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,12 +32,18 @@ class GeminiGenerateContentClient:
     """Small direct REST client for Gemini without a provider SDK."""
 
     def __init__(
-        self, api_key: str, model: str, base_url: str, timeout: float = 60
+        self,
+        api_key: str,
+        model: str,
+        base_url: str,
+        timeout: float = 60,
+        max_retries: int = 2,
     ) -> None:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.max_retries = max_retries
 
     def _build_payload(
         self, contents: list[JsonObject], tools: list[JsonObject]
@@ -81,16 +88,29 @@ class GeminiGenerateContentClient:
             },
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise GeminiAPIError(
-                f"Gemini API returned HTTP {exc.code}: {body}"
-            ) from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
-            raise GeminiAPIError(f"Could not reach the Gemini API: {exc}") from exc
+        transient_statuses = {429, 500, 502, 503, 504}
+        for attempt in range(self.max_retries + 1):
+            try:
+                with urllib.request.urlopen(
+                    request, timeout=self.timeout
+                ) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                if exc.code in transient_statuses and attempt < self.max_retries:
+                    time.sleep(2**attempt)
+                    continue
+                raise GeminiAPIError(
+                    f"Gemini API returned HTTP {exc.code}: {body}"
+                ) from exc
+            except (urllib.error.URLError, TimeoutError) as exc:
+                if attempt < self.max_retries:
+                    time.sleep(2**attempt)
+                    continue
+                raise GeminiAPIError(
+                    f"Could not reach the Gemini API: {exc}"
+                ) from exc
         candidates = result.get("candidates") if isinstance(result, dict) else None
         if not isinstance(candidates, list) or not candidates:
             feedback = result.get("promptFeedback", {}) if isinstance(result, dict) else {}

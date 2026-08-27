@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import copy
+import io
+import json
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from src.chatbot import MCPChatbot
+from src.chatbot import GeminiGenerateContentClient, MCPChatbot
 from src.config import PROJECT_ROOT, Settings
 
 
@@ -41,6 +45,44 @@ class FakeMCPClient:
             "content": [{"type": "text", "text": '{"network":"10.0.0.0"}'}],
             "isError": False,
         }
+
+
+class GeminiClientRetryTests(unittest.TestCase):
+    @patch("src.chatbot.time.sleep")
+    @patch("src.chatbot.urllib.request.urlopen")
+    def test_transient_http_error_is_retried(self, urlopen, sleep) -> None:
+        unavailable = urllib.error.HTTPError(
+            "https://example.invalid",
+            503,
+            "Service Unavailable",
+            {},
+            io.BytesIO(b'{"error":"busy"}'),
+        )
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": "OK"}],
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+        urlopen.side_effect = [unavailable, response]
+        client = GeminiGenerateContentClient(
+            "test-key", "test-model", "https://example.invalid"
+        )
+
+        result = client.generate_content(
+            [{"role": "user", "parts": [{"text": "test"}]}], []
+        )
+
+        self.assertEqual(result["candidates"][0]["content"]["parts"][0]["text"], "OK")
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once_with(1)
 
 
 class ChatbotContextTests(unittest.TestCase):
