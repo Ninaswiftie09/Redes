@@ -10,7 +10,6 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    maxShutdownDelaySeconds: 30
     envVars:
       - key: MCP_AUTH_TOKEN
         sync: false
