@@ -25,6 +25,12 @@
         "-m",
         "src.network_server"
       ]
+    },
+    "network_ops_remote": {
+      "enabled": false,
+      "transport": "streamable_http",
+      "url_env": "MCP_REMOTE_URL",
+      "auth_token_env": "MCP_REMOTE_TOKEN"
     }
   }
 }

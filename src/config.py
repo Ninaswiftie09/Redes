@@ -71,11 +71,21 @@ class Settings:
         )
 
 
-def load_server_definitions(path: Path) -> dict[str, list[str]]:
-    """Read enabled server commands and expand safe project placeholders."""
+@dataclass(frozen=True)
+class ServerDefinition:
+    """Validated configuration for one local or remote MCP server."""
+
+    transport: str
+    command: tuple[str, ...] = ()
+    url: str = ""
+    auth_token: str = ""
+
+
+def load_server_definitions(path: Path) -> dict[str, ServerDefinition]:
+    """Read enabled server definitions and expand safe project placeholders."""
 
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    definitions: dict[str, list[str]] = {}
+    definitions: dict[str, ServerDefinition] = {}
     replacements = {
         "{python}": sys.executable,
         "{workspace}": str(PROJECT_ROOT),
@@ -91,12 +101,47 @@ def load_server_definitions(path: Path) -> dict[str, list[str]]:
     }
 
     for name, definition in data.get("servers", {}).items():
+        if not isinstance(definition, dict):
+            raise ValueError(f"Server '{name}' must be a JSON object")
         if not definition.get("enabled", True):
             continue
-        raw_command = definition.get("command")
-        if not isinstance(raw_command, list) or not raw_command:
-            raise ValueError(f"Server '{name}' must define a non-empty command list")
-        definitions[name] = [
-            replacements.get(str(part), str(part)) for part in raw_command
-        ]
+        transport = str(definition.get("transport", "stdio"))
+        if transport == "stdio":
+            raw_command = definition.get("command")
+            if not isinstance(raw_command, list) or not raw_command:
+                raise ValueError(
+                    f"Server '{name}' must define a non-empty command list"
+                )
+            command = tuple(
+                replacements.get(str(part), str(part)) for part in raw_command
+            )
+            definitions[name] = ServerDefinition(
+                transport=transport, command=command
+            )
+            continue
+        if transport == "streamable_http":
+            raw_url = definition.get("url", "")
+            url_env = definition.get("url_env", "")
+            if raw_url and not isinstance(raw_url, str):
+                raise ValueError(f"Server '{name}' URL must be a string")
+            if url_env and not isinstance(url_env, str):
+                raise ValueError(f"Server '{name}' url_env must be a string")
+            url = str(raw_url).strip()
+            if not url and url_env:
+                url = os.getenv(url_env, "").strip()
+            if not url:
+                raise ValueError(f"Server '{name}' does not have a remote URL")
+            token_env = definition.get("auth_token_env", "")
+            if token_env and not isinstance(token_env, str):
+                raise ValueError(
+                    f"Server '{name}' auth_token_env must be a string"
+                )
+            auth_token = os.getenv(token_env, "").strip() if token_env else ""
+            definitions[name] = ServerDefinition(
+                transport=transport,
+                url=url,
+                auth_token=auth_token,
+            )
+            continue
+        raise ValueError(f"Server '{name}' has unsupported transport '{transport}'")
     return definitions

@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from src.config import PROJECT_ROOT, Settings, load_server_definitions
-from src.mcp_client import JsonlExchangeLogger, MCPError, MCPStdioClient
+from src.mcp_client import (
+    JsonlExchangeLogger,
+    MCPClient,
+    MCPError,
+    MCPStdioClient,
+    MCPStreamableHttpClient,
+)
 
 
 JsonObject = dict[str, Any]
@@ -108,8 +114,8 @@ class MCPChatbot:
             settings.gemini_model,
             settings.gemini_base_url,
         )
-        self.clients: dict[str, MCPStdioClient] = {}
-        self.tool_routes: dict[str, tuple[MCPStdioClient, str]] = {}
+        self.clients: dict[str, MCPClient] = {}
+        self.tool_routes: dict[str, tuple[MCPClient, str]] = {}
         self.tools: list[JsonObject] = []
         self.messages: list[JsonObject] = []
 
@@ -120,15 +126,26 @@ class MCPChatbot:
 
     def start_servers(self) -> None:
         definitions = load_server_definitions(self.settings.server_config_path)
-        for name, command in definitions.items():
-            client = MCPStdioClient(
-                name=name,
-                command=command,
-                logger=self.logger,
-                protocol_version=self.settings.mcp_protocol_version,
-                timeout=self.settings.request_timeout,
-                cwd=PROJECT_ROOT,
-            )
+        for name, definition in definitions.items():
+            if definition.transport == "stdio":
+                client: MCPClient = MCPStdioClient(
+                    name=name,
+                    command=list(definition.command),
+                    logger=self.logger,
+                    protocol_version=self.settings.mcp_protocol_version,
+                    timeout=self.settings.request_timeout,
+                    cwd=PROJECT_ROOT,
+                )
+            else:
+                client = MCPStreamableHttpClient(
+                    name=name,
+                    url=definition.url,
+                    logger=self.logger,
+                    protocol_version=self.settings.mcp_protocol_version,
+                    timeout=self.settings.request_timeout,
+                    auth_token=definition.auth_token,
+                    cwd=PROJECT_ROOT,
+                )
             try:
                 client.connect()
                 self.clients[name] = client
