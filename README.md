@@ -15,6 +15,7 @@ Implemented features include:
 
 - direct Gemini `generateContent` REST requests with automatic retries for
   transient API failures;
+- prompt-aware tool selection that avoids sending unrelated schemas to Gemini;
 - conversation context preserved throughout one CLI session;
 - visible and persistent logs for every MCP request, response, notification,
   and server diagnostic;

@@ -23,6 +23,94 @@ from src.mcp_client import (
 
 JsonObject = dict[str, Any]
 
+TOOL_CATEGORY_KEYWORDS = {
+    "filesystem": {
+        "archivo",
+        "archivos",
+        "carpeta",
+        "create",
+        "directory",
+        "directorio",
+        "edit",
+        "editar",
+        "file",
+        "files",
+        "folder",
+        "leer",
+        "read",
+        "write",
+    },
+    "git": {
+        "branch",
+        "commit",
+        "diff",
+        "git",
+        "history",
+        "log",
+        "rama",
+        "repository",
+        "repositorio",
+        "stage",
+        "status",
+    },
+    "network": {
+        "address",
+        "analizar",
+        "analyze",
+        "cidr",
+        "conectividad",
+        "connectivity",
+        "dns",
+        "host",
+        "ip",
+        "network",
+        "port",
+        "puerto",
+        "red",
+        "resolve",
+        "resolver",
+        "subnet",
+        "subred",
+        "tcp",
+    },
+}
+
+TOOL_HINTS = {
+    "create_directory": {"carpeta", "create", "directory", "directorio", "folder"},
+    "edit_file": {"change", "edit", "editar", "modificar"},
+    "git_add": {"add", "agregar", "stage", "staged"},
+    "git_commit": {"commit", "confirmar"},
+    "git_status": {"estado", "status"},
+    "list_directory": {"listar", "list"},
+    "read_text_file": {"leer", "read"},
+    "write_file": {"archivo", "create", "crear", "escribir", "file", "write"},
+}
+
+IGNORED_MATCH_TERMS = {
+    "a",
+    "an",
+    "and",
+    "con",
+    "de",
+    "el",
+    "en",
+    "for",
+    "is",
+    "la",
+    "las",
+    "los",
+    "of",
+    "para",
+    "the",
+    "to",
+    "un",
+    "una",
+    "use",
+    "usa",
+    "with",
+    "y",
+}
+
 
 class GeminiAPIError(RuntimeError):
     """Raised for an unsuccessful Gemini generateContent request."""
@@ -144,6 +232,69 @@ class MCPChatbot:
         sanitized = re.sub(r"[^A-Za-z0-9_-]", "_", f"{server}__{tool}")
         return sanitized[:64]
 
+    @staticmethod
+    def _tool_category(tool_name: str) -> str:
+        if tool_name.startswith("filesystem__"):
+            return "filesystem"
+        if tool_name.startswith("git__"):
+            return "git"
+        if tool_name.startswith("network_ops"):
+            return "network"
+        return ""
+
+    def _select_tools(self, prompt: str) -> list[JsonObject]:
+        normalized_prompt = prompt.lower()
+        explicit = [
+            tool
+            for tool in self.tools
+            if isinstance(tool.get("name"), str)
+            and tool["name"].lower() in normalized_prompt
+        ]
+        if explicit:
+            return explicit
+
+        prompt_terms = set(re.findall(r"[a-záéíóúñ0-9_]+", normalized_prompt))
+        prompt_terms -= IGNORED_MATCH_TERMS
+        matched_categories = {
+            category
+            for category, keywords in TOOL_CATEGORY_KEYWORDS.items()
+            if prompt_terms & keywords
+        }
+        scored: dict[str, list[tuple[int, JsonObject]]] = {
+            category: [] for category in matched_categories
+        }
+        uncategorized: list[tuple[int, JsonObject]] = []
+        for tool in self.tools:
+            name = tool.get("name")
+            description = tool.get("description", "")
+            if not isinstance(name, str) or not isinstance(description, str):
+                continue
+            category = self._tool_category(name)
+            native_name = name.partition("__")[2]
+            searchable = set(
+                re.findall(r"[a-záéíóúñ0-9_]+", f"{name} {description}".lower())
+            )
+            searchable -= IGNORED_MATCH_TERMS
+            score = len(prompt_terms & searchable)
+            score += len(prompt_terms & TOOL_HINTS.get(native_name, set())) * 3
+            if category in matched_categories:
+                score += 4
+                scored[category].append((score, tool))
+            elif not matched_categories and score:
+                uncategorized.append((score, tool))
+
+        if matched_categories:
+            per_category = 8 if len(matched_categories) == 1 else 6
+            selected: list[JsonObject] = []
+            for category in sorted(matched_categories):
+                ranked = sorted(
+                    scored[category], key=lambda item: item[0], reverse=True
+                )
+                selected.extend(tool for _, tool in ranked[:per_category])
+            return selected
+        ranked = sorted(uncategorized, key=lambda item: item[0], reverse=True)
+        return [tool for _, tool in ranked[:8]]
+
     def start_servers(self) -> None:
         definitions = load_server_definitions(self.settings.server_config_path)
         for name, definition in definitions.items():
@@ -224,9 +375,10 @@ class MCPChatbot:
                 "GEMINI_API_KEY is missing. Copy .env.example to .env and add your key."
             )
         self.messages.append({"role": "user", "parts": [{"text": prompt}]})
+        selected_tools = self._select_tools(prompt)
         final_text = ""
         for _ in range(8):
-            response = self.gemini.generate_content(self.messages, self.tools)
+            response = self.gemini.generate_content(self.messages, selected_tools)
             content = response["candidates"][0]["content"]
             self.messages.append(content)
             parts = content["parts"]

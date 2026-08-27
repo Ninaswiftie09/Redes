@@ -16,10 +16,12 @@ from src.config import PROJECT_ROOT, Settings
 class FakeGeminiClient:
     def __init__(self, responses: list[dict[str, object]] | None = None) -> None:
         self.calls: list[list[dict[str, object]]] = []
+        self.tool_calls: list[list[dict[str, object]]] = []
         self.responses = responses or []
 
     def generate_content(self, contents, tools):  # type: ignore[no-untyped-def]
         self.calls.append(copy.deepcopy(contents))
+        self.tool_calls.append(copy.deepcopy(tools))
         answer_number = len(self.calls)
         if self.responses:
             return self.responses.pop(0)
@@ -86,6 +88,68 @@ class GeminiClientRetryTests(unittest.TestCase):
 
 
 class ChatbotContextTests(unittest.TestCase):
+    def test_general_question_does_not_send_unrelated_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = Settings(
+                gemini_api_key="test-key",
+                gemini_model="test-model",
+                gemini_base_url="https://example.invalid",
+                mcp_protocol_version="2025-11-25",
+                request_timeout=2,
+                confirm_tools=False,
+                log_path=Path(temporary_directory) / "mcp.jsonl",
+                server_config_path=PROJECT_ROOT / "mcp_servers.json",
+            )
+            bot = MCPChatbot(settings)
+            bot.tools = [
+                {
+                    "name": "network_ops_remote__analyze_cidr",
+                    "description": "Analyze a CIDR network.",
+                    "parametersJsonSchema": {"type": "object"},
+                }
+            ]
+            fake = FakeGeminiClient()
+            bot.gemini = fake  # type: ignore[assignment]
+
+            bot.chat("Who was Alan Turing?")
+
+            self.assertEqual(fake.tool_calls, [[]])
+
+    def test_explicit_alias_sends_only_the_named_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = Settings(
+                gemini_api_key="test-key",
+                gemini_model="test-model",
+                gemini_base_url="https://example.invalid",
+                mcp_protocol_version="2025-11-25",
+                request_timeout=2,
+                confirm_tools=False,
+                log_path=Path(temporary_directory) / "mcp.jsonl",
+                server_config_path=PROJECT_ROOT / "mcp_servers.json",
+            )
+            bot = MCPChatbot(settings)
+            bot.tools = [
+                {
+                    "name": "network_ops__analyze_cidr",
+                    "description": "Analyze a CIDR network locally.",
+                    "parametersJsonSchema": {"type": "object"},
+                },
+                {
+                    "name": "network_ops_remote__analyze_cidr",
+                    "description": "Analyze a CIDR network remotely.",
+                    "parametersJsonSchema": {"type": "object"},
+                },
+            ]
+            fake = FakeGeminiClient()
+            bot.gemini = fake  # type: ignore[assignment]
+
+            bot.chat("Use network_ops_remote__analyze_cidr for this request.")
+
+            self.assertEqual(
+                [tool["name"] for tool in fake.tool_calls[0]],
+                ["network_ops_remote__analyze_cidr"],
+            )
+
     def test_two_prompts_share_the_same_session_history(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             settings = Settings(
