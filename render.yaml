@@ -13,4 +13,4 @@ services:
     maxShutdownDelaySeconds: 30
     envVars:
       - key: MCP_AUTH_TOKEN
-        generateValue: true
+        sync: false
