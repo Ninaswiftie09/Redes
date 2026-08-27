@@ -1,21 +1,30 @@
 # Manual MCP Network Assistant
 
-## Author 
-  Nina Nájera Marakovits - 231088
+## Author
 
-A command-line chatbot for Networks. It connects Gemini to
-local Model Context Protocol (MCP) servers and implements the MCP client and the
-custom server manually with JSON-RPC 2.0. No MCP SDK is imported by the project
-code.
+Nina Nájera Marakovits - 231088
 
-The partial-delivery scope is:
+## Overview
 
-- direct connection to the Google Gemini `generateContent` REST API;
-- in-session conversation context;
-- visible and persistent logs of every MCP request, response, and notification;
-- the official Filesystem and Git local MCP servers;
-- a custom local MCP server for an industrial network-operations use case;
-- the partial report sections 8 and 10.
+This project is a command-line AI host for network operations. It connects the
+Google Gemini REST API to local and remote Model Context Protocol (MCP) servers.
+The host, MCP clients, custom servers, transports, and JSON-RPC 2.0 exchange are
+implemented manually without an MCP SDK.
+
+Implemented features include:
+
+- direct Gemini `generateContent` REST requests with automatic retries for
+  transient API failures;
+- conversation context preserved throughout one CLI session;
+- visible and persistent logs for every MCP request, response, notification,
+  and server diagnostic;
+- official Filesystem and Git MCP servers over `stdio`;
+- a custom local network-operations MCP server over `stdio`;
+- the same custom server deployed on Render over authenticated Streamable HTTP;
+- tool discovery and execution through `initialize`,
+  `notifications/initialized`, `tools/list`, and `tools/call`;
+- Wireshark evidence for the complete remote MCP lifecycle; and
+- automated unit and integration coverage for the manual implementations.
 
 ## Architecture
 
@@ -23,40 +32,75 @@ The partial-delivery scope is:
 User
   |
   v
-CLI host (src/chatbot.py) ---- HTTPS ----> Google Gemini API
+CLI host (src/chatbot.py) -------- HTTPS --------> Google Gemini API
   |
-  +---- JSON-RPC 2.0 / stdio ----> Official Filesystem server
-  +---- JSON-RPC 2.0 / stdio ----> Official Git server
-  +---- JSON-RPC 2.0 / stdio ----> Custom Network Operations server
+  +---- JSON-RPC 2.0 / stdio ----> Official Filesystem MCP server
+  +---- JSON-RPC 2.0 / stdio ----> Official Git MCP server
+  +---- JSON-RPC 2.0 / stdio ----> Local Network Operations MCP server
+  +---- JSON-RPC 2.0 / HTTPS ----> Remote Network Operations MCP server
+                                      |
+                                      +---- Docker container on Render
 ```
 
-The host starts one subprocess per local server, sends `initialize`, sends the
-`notifications/initialized` notification, discovers tools with `tools/list`, and
-executes them with `tools/call`. Messages are UTF-8 JSON objects separated by
-newlines, as specified by MCP's stdio transport.
+The host creates one client per enabled entry in `mcp_servers.json`. Each client
+performs the MCP lifecycle, discovers the server tools, and exposes a unique
+alias in the form `SERVER__TOOL`. The remote transport uses MCP Streamable HTTP
+in JSON response mode at `POST /mcp` and authenticates with a bearer token.
 
-## Custom server tools
+## Manual protocol implementation
 
-| Tool | Purpose | Main parameters |
+Project code does not import FastMCP or any MCP client/server SDK. The following
+behavior is implemented directly:
+
+- JSON-RPC 2.0 request identifiers, results, errors, and notifications;
+- MCP protocol negotiation for version `2025-11-25`;
+- newline-delimited UTF-8 JSON over local `stdio`;
+- Streamable HTTP request and response handling;
+- JSON and Server-Sent Event response parsing in the HTTP client;
+- required MCP HTTP headers and protocol-version validation;
+- bearer authentication, origin validation, and request-size limits; and
+- graceful subprocess and HTTP server shutdown.
+
+The official Filesystem and Git servers remain external assignment dependencies;
+only the project host and custom server are manual implementations.
+
+## Custom server specification
+
+The custom server supports a corporate help-desk and network-diagnostics use
+case. Every tool is read-only.
+
+| Tool | Purpose | Parameters | Main result fields |
+| --- | --- | --- | --- |
+| `resolve_dns` | Resolve a host during name-resolution troubleshooting | `hostname`; optional `ip_version` (`any`, `ipv4`, `ipv6`) | hostname, address family, unique addresses |
+| `check_tcp_connection` | Test whether one application endpoint is reachable | `host`, `port`; optional `timeout_ms` | destination, reachability, elapsed time, error |
+| `analyze_cidr` | Calculate IPv4 or IPv6 subnet facts without network traffic | `cidr` | network, prefix, mask, address counts, usable range |
+| `get_local_network_info` | Obtain basic host and resolver context | none | hostname, FQDN, visible addresses |
+
+Use DNS and TCP diagnostics only for hosts and networks you are authorized to
+test.
+
+### Transports and endpoints
+
+| Mode | Transport | Endpoint or command |
 | --- | --- | --- |
-| `resolve_dns` | Resolve a hostname for incident triage | `hostname`, optional `ip_version` |
-| `check_tcp_connection` | Test whether one TCP endpoint is reachable | `host`, `port`, optional `timeout_ms` |
-| `analyze_cidr` | Calculate subnet addressing details locally | `cidr` |
-| `get_local_network_info` | Show workstation hostname and resolved addresses | none |
+| Local | MCP over `stdio` | `python -m src.network_server` |
+| Remote | MCP Streamable HTTP over TLS | `POST https://uvg-network-operations.onrender.com/mcp` |
+| Health check | HTTPS | `GET https://uvg-network-operations.onrender.com/health` |
 
-All custom tools are read-only. DNS and TCP tools access only destinations that
-the user explicitly supplies. Use them only on systems you are authorized to
-diagnose.
+`POST /mcp` requires `Authorization: Bearer <token>`. The public health endpoint
+does not require authentication and returns the server name and version.
 
 ## Requirements
 
-- Windows 10 or later (the configuration also resolves `npx.cmd` automatically)
+- Windows 10 or later
 - Python 3.10 or later
-- Node.js 18 or later, including `npm` and `npx`
+- Node.js 18 or later, including `npm`
 - Git
-- A Gemini API key from Google AI Studio for normal chatbot prompts
+- a Gemini API key for natural-language chatbot prompts
+- a Render MCP bearer token for the deployed remote server
+- Wireshark only when reproducing the packet analysis
 
-The direct `/call` command and automated tests do not require an API key.
+Direct `/call` commands and automated tests do not require a Gemini API key.
 
 ## Installation
 
@@ -71,18 +115,11 @@ npm.cmd install
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and replace `replace_with_your_key` with an API key created in
-[Google AI Studio](https://aistudio.google.com/app/apikey). The Gemini API has a
-Free Tier for supported models, so this project does not require a paid API
-account. Do not commit `.env`; it is ignored by Git.
-
 `npm install` installs the official Filesystem server pinned to version
 `2025.11.25`. `requirements.txt` installs the official Git server at the same
-version and keeps its MCP Python dependency on the compatible 1.x release. Those
-packages are required by the assignment; the chatbot and custom server themselves
-still implement MCP without an SDK.
+version and its compatible MCP 1.x dependency.
 
-If PowerShell blocks virtual-environment activation, use the interpreter
+If PowerShell blocks virtual-environment activation, call its interpreter
 directly:
 
 ```powershell
@@ -93,21 +130,32 @@ npm.cmd install
 
 ## Configuration
 
-`.env` supports these settings:
+Copy `.env.example` to `.env`, then set the secrets locally:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.6-flash
+MCP_CONFIRM_TOOLS=true
+MCP_REQUEST_TIMEOUT=30
+MCP_REMOTE_TOKEN=the_same_token_configured_in_render
+```
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | empty | Required secret for Gemini requests |
-| `GEMINI_MODEL` | `gemini-3.6-flash` | Gemini model ID |
+| `GEMINI_API_KEY` | empty | Secret used for Gemini REST requests |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | Gemini model identifier |
 | `GEMINI_API_URL` | `https://generativelanguage.googleapis.com` | Gemini REST API base URL |
-| `MCP_CONFIRM_TOOLS` | `true` | Ask before every model-requested tool call |
+| `MCP_CONFIRM_TOOLS` | `true` | Confirm every model-requested tool execution |
 | `MCP_REQUEST_TIMEOUT` | `30` | MCP response timeout in seconds |
+| `MCP_REMOTE_TOKEN` | empty | Bearer token shared with the Render service |
 
-Local subprocess commands are in `mcp_servers.json`. `{python}` expands to the
-active Python interpreter, `{node}` resolves the Node.js executable,
-`{filesystem_server}` resolves the locally installed official server, and
-`{workspace}` expands to this repository's absolute path. Filesystem access is
-deliberately limited to that path.
+Never commit `.env`, TLS session keys, or authentication headers. `.env` is
+excluded by Git and by the container build context.
+
+Local and remote server definitions are stored in `mcp_servers.json`.
+`{python}`, `{node}`, `{filesystem_server}`, `{workspace}`, and
+`{workspace_posix}` expand at runtime. Filesystem access is restricted to this
+repository.
 
 ## Run the chatbot
 
@@ -115,16 +163,15 @@ deliberately limited to that path.
 python main.py
 ```
 
-Startup connects each available server and prints all initialization and tool
-discovery messages. The CLI continues if one optional server is unavailable, so
-the custom server can still be demonstrated while an installation problem is
-fixed.
+Startup connects every enabled server and prints its initialization and tool
+discovery messages. One unavailable server produces a warning without stopping
+the remaining clients.
 
 Available commands:
 
 ```text
 /tools                  list discovered MCP tools
-/call TOOL JSON         call a tool without the LLM
+/call TOOL JSON         call a tool directly without Gemini
 /log [N]                show the last N MCP log records
 /clear                  clear conversation context
 /help                   show command help
@@ -133,9 +180,7 @@ Available commands:
 
 ## Demonstration scenarios
 
-### 1. Custom local server without an API key
-
-List the exact aliases with `/tools`, then run:
+### Local custom server
 
 ```text
 /call network_ops__analyze_cidr {"cidr":"192.168.50.37/24"}
@@ -144,70 +189,123 @@ List the exact aliases with `/tools`, then run:
 /call network_ops__get_local_network_info {}
 ```
 
-The console displays both the JSON-RPC request and response, and writes them to
-`logs/mcp.jsonl`.
+### Remote custom server
 
-### 2. Context with Gemini
+The remote server provides the same interface under the
+`network_ops_remote__` prefix:
+
+```text
+/call network_ops_remote__analyze_cidr {"cidr":"10.20.30.40/27"}
+/call network_ops_remote__resolve_dns {"hostname":"example.com","ip_version":"ipv4"}
+```
+
+The console and `logs/mcp.jsonl` show the manual JSON-RPC exchange.
+
+### Conversation context with Gemini
 
 ```text
 You> Who was Alan Turing?
 You> In what year was he born?
 ```
 
-The second answer uses the same Gemini `contents` history. `/clear` starts a new
-session.
+The second request includes the same session history, allowing Gemini to resolve
+the reference to Alan Turing. `/clear` starts a new context.
 
-### 3. Filesystem and Git workflow
+### Official Filesystem and Git workflow
 
-Use a disposable directory or branch before demonstrating write operations. Ask:
+The verified workflow in `docs/mcp-demo/README.md` was performed through the
+chatbot as follows:
 
-```text
-Create demo-workspace/README.md with a short project description. Then use the
-Git tools to show repository status, add that file, and commit it with the message
-"docs: add MCP demo readme". Ask for my approval before every tool call.
-```
+1. `filesystem__create_directory` created `docs/mcp-demo`.
+2. `filesystem__write_file` created its `README.md`.
+3. `git__git_add` staged only that file.
+4. `git__git_commit` created commit `a4d3966`.
+5. `git__git_status` confirmed the result.
 
-The host presents a confirmation prompt for every model-requested function call. Review the
-tool name and arguments before accepting. Git commits also require `user.name` and
-`user.email` to be configured in the repository.
+For an interactive demonstration, ask Gemini to create a disposable file,
+inspect it, stage it, and commit it. Review every confirmation prompt before
+allowing a write or Git operation.
+
+## Remote deployment with Render
+
+The root `render.yaml` defines a free Docker web service named
+`uvg-network-operations` on branch `Proyecto1`. To deploy another instance:
+
+1. Open the Render Dashboard and choose **New > Blueprint**.
+2. Connect this GitHub repository and select branch `Proyecto1`.
+3. Keep the Blueprint path as `render.yaml`.
+4. Provide a strong random value for `MCP_AUTH_TOKEN` when prompted.
+5. Deploy the Blueprint and wait until the service is `Live`.
+6. Store the same value locally as `MCP_REMOTE_TOKEN`.
+7. Verify `GET /health`, then run a remote `/call` command.
+
+The Docker image binds to `0.0.0.0` and uses Render's `PORT` environment
+variable. Free services can sleep after inactivity, so the first request can be
+slower while the instance starts.
 
 ## Logs
 
 Every MCP exchange is printed and stored as one JSON object per line in
-`logs/mcp.jsonl`. Each entry includes an ISO-8601 UTC timestamp, server name,
-direction, and complete message. Server diagnostics from `stderr` are logged too,
-but never mixed into the JSON-RPC `stdout` transport.
+`logs/mcp.jsonl`. Records contain an ISO-8601 UTC timestamp, server name,
+direction, and complete JSON-RPC message. Server `stderr` is logged separately
+and never mixed with the protocol `stdout` stream.
+
+Logs can contain tool arguments and results. Review them before sharing and do
+not place secrets in tool arguments.
+
+## Wireshark analysis evidence
+
+The screenshots under `docs/capturas` document:
+
+- TCP connection establishment and TLS 1.3 negotiation;
+- authenticated HTTPS requests to `POST /mcp`;
+- the `initialize` request and response;
+- the `notifications/initialized` synchronization notification and HTTP `202`;
+- the `tools/list` request and response; and
+- a `tools/call` request and successful response.
+
+The packet capture and TLS key log are intentionally excluded from Git because
+decrypted HTTP headers include the bearer token. Only reviewed screenshots are
+versioned.
 
 ## Tests
 
 ```powershell
-python -m unittest discover -v
+python -m unittest discover -s tests -v
 ```
 
-The suite checks request validation, tool schemas, subnet calculations,
-notifications, process startup, initialization, discovery, tool execution, and
-graceful shutdown. It does not consume Gemini quota or require Internet access.
+The suite covers JSON-RPC validation, tool schemas, network calculations,
+notifications, `stdio` lifecycle, Streamable HTTP lifecycle, bearer
+authentication, origin and protocol-version validation, SSE parsing, Gemini
+tool routing, conversation context, and retry behavior. Tests do not consume
+Gemini quota.
 
 ## Project structure
 
 ```text
 main.py                    CLI entry point
-mcp_servers.json           local server process configuration
-src/chatbot.py             host, Gemini REST client, function-calling loop, CLI
-src/mcp_client.py          manual MCP/JSON-RPC stdio client and logger
-src/network_server.py      manual custom MCP server and network tools
+mcp_servers.json           local and remote MCP client configuration
+render.yaml                Render Blueprint
+Dockerfile                 remote server container
+src/chatbot.py             host, Gemini REST client, tool loop, and CLI
+src/mcp_client.py          manual stdio and Streamable HTTP clients
+src/network_server.py      custom JSON-RPC server and network tools
+src/remote_server.py       authenticated Streamable HTTP transport
 src/config.py              environment and server configuration
-tests/                     unit and subprocess integration tests
-docs/                      editable report source
+tests/                     unit and integration tests
+docs/capturas/             reviewed Wireshark evidence
+docs/mcp-demo/             official Filesystem and Git MCP demonstration
 ```
 
 ## References
 
 - [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25)
 - [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
-- [MCP stdio transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
+- [MCP transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 - [MCP tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
 - [Official MCP servers](https://github.com/modelcontextprotocol/servers)
 - [JSON-RPC 2.0](https://www.jsonrpc.org/specification)
 - [Gemini function calling](https://ai.google.dev/gemini-api/docs/function-calling)
 - [Gemini `generateContent` API](https://ai.google.dev/api/generate-content)
+- [Render Blueprints](https://render.com/docs/infrastructure-as-code)
+- [Render free services](https://render.com/docs/free)
