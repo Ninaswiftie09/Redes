@@ -135,6 +135,7 @@ class MCPChatbot:
                     protocol_version=self.settings.mcp_protocol_version,
                     timeout=self.settings.request_timeout,
                     cwd=PROJECT_ROOT,
+                    environment=dict(definition.environment),
                 )
             else:
                 client = MCPStreamableHttpClient(

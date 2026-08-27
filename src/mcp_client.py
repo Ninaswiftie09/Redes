@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import subprocess
 import threading
@@ -84,6 +85,7 @@ class MCPStdioClient:
         protocol_version: str = "2025-11-25",
         timeout: float = 30.0,
         cwd: Path | None = None,
+        environment: dict[str, str] | None = None,
     ) -> None:
         self.name = name
         self.command = command
@@ -91,6 +93,7 @@ class MCPStdioClient:
         self.protocol_version = protocol_version
         self.timeout = timeout
         self.cwd = cwd
+        self.environment = environment or {}
         self.process: subprocess.Popen[str] | None = None
         self.server_info: JsonObject = {}
         self._next_id = 1
@@ -117,6 +120,7 @@ class MCPStdioClient:
                 errors="replace",
                 bufsize=1,
                 cwd=str(self.cwd) if self.cwd else None,
+                env={**os.environ, **self.environment},
             )
         except OSError as exc:
             raise MCPError(f"Could not start server '{self.name}': {exc}") from exc

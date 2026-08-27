@@ -79,6 +79,7 @@ class ServerDefinition:
     command: tuple[str, ...] = ()
     url: str = ""
     auth_token: str = ""
+    environment: tuple[tuple[str, str], ...] = ()
 
 
 def load_server_definitions(path: Path) -> dict[str, ServerDefinition]:
@@ -89,6 +90,7 @@ def load_server_definitions(path: Path) -> dict[str, ServerDefinition]:
     replacements = {
         "{python}": sys.executable,
         "{workspace}": str(PROJECT_ROOT),
+        "{workspace_posix}": PROJECT_ROOT.as_posix(),
         "{node}": shutil.which("node") or "node",
         "{filesystem_server}": str(
             PROJECT_ROOT
@@ -115,8 +117,22 @@ def load_server_definitions(path: Path) -> dict[str, ServerDefinition]:
             command = tuple(
                 replacements.get(str(part), str(part)) for part in raw_command
             )
+            raw_environment = definition.get("environment", {})
+            if not isinstance(raw_environment, dict) or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in raw_environment.items()
+            ):
+                raise ValueError(
+                    f"Server '{name}' environment must contain string pairs"
+                )
+            environment = tuple(
+                (key, replacements.get(value, value))
+                for key, value in raw_environment.items()
+            )
             definitions[name] = ServerDefinition(
-                transport=transport, command=command
+                transport=transport,
+                command=command,
+                environment=environment,
             )
             continue
         if transport == "streamable_http":

@@ -16,7 +16,12 @@
         "mcp_server_git",
         "--repository",
         "{workspace}"
-      ]
+      ],
+      "environment": {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": "{workspace_posix}"
+      }
     },
     "network_ops": {
       "enabled": true,
