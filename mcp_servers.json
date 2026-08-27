@@ -32,9 +32,9 @@
       ]
     },
     "network_ops_remote": {
-      "enabled": false,
+      "enabled": true,
       "transport": "streamable_http",
-      "url_env": "MCP_REMOTE_URL",
+      "url": "https://uvg-network-operations.onrender.com/mcp",
       "auth_token_env": "MCP_REMOTE_TOKEN"
     }
   }
