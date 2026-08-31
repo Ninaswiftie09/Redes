@@ -4,6 +4,8 @@ En este ejercicio se construyó la topología con dos routers 1941, dos switches
 cinco PCs. Se configuró enrutamiento inter-VLAN mediante router-on-a-stick, DHCP en
 los dos routers, rutas estáticas entre las sedes y acceso SSH a S1 desde PC1.
 
+link del repo: https://github.com/Ninaswiftie09/Redes/tree/Practica1
+
 ## 1. Plan de direccionamiento
 
 | Dispositivo / interfaz | Dirección | Máscara | Uso |
