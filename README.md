@@ -2,4 +2,4 @@
 
 ## Integrantes
    - Nina Nájera - 231088
-   - Eliazar Canastuj
+   - Eliazar Canastuj - 23384
