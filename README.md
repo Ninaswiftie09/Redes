@@ -25,7 +25,3 @@
 | EIGRP-1 voz | 172.16.0.200 | /27 | 172.16.0.193 |
 | EIGRP-2 LAN | 172.16.0.10 | /25 | 172.16.0.1 |
 
-
-## Estado de la entrega
-
-Se incluyen los documentos [PDF1](<Docs/Lab3 pdf1.pdf>) y [PDF2](Docs/PDF2.pdf), el archivo [Laboratorio3.pkt](PacketTracer/Laboratorio3.pkt), las configuraciones y las evidencias de verificacion. El resumen hacia OSPF utiliza una adaptacion estatica del simulador, descrita en el PDF2.
