@@ -26,15 +26,6 @@
 | EIGRP-2 LAN | 172.16.0.10 | /25 | 172.16.0.1 |
 
 
-## Verificacion realizada
-
-Las seis subredes de PCs respondieron a ping. La repeticion de las pruebas, despues de ARP y convergencia, dio 0% de perdida. Ping principal: 192.168.1.10 -> 172.16.0.10, 4/4 respuestas. Tracert: 192.168.1.1 -> 10.0.0.6 -> 10.0.0.21 -> 172.16.0.10.
-
-`PacketTracer/evidencias/verificacion.txt` contiene las salidas de los cinco routers, interfaces OSPF, topologia EIGRP y pruebas de PC; `PacketTracer/evidencias/ping-tracert.png` y `PacketTracer/evidencias/topologia.png` son capturas reales del simulador. Los tiempos de espera de las primeras pruebas se conservaron como evidencia de la resolucion ARP inicial; las pruebas repetidas responden sin perdida.
-
-Las lineas rojas representan cables seriales; sus indicadores verdes confirman enlaces activos. Las configuraciones en `PacketTracer/configuraciones/` se exportaron del archivo final guardado por Packet Tracer.
-
-
 ## Estado de la entrega
 
 Se incluyen los documentos [PDF1](<Docs/Lab3 pdf1.pdf>) y [PDF2](Docs/PDF2.pdf), el archivo [Laboratorio3.pkt](PacketTracer/Laboratorio3.pkt), las configuraciones y las evidencias de verificacion. El resumen hacia OSPF utiliza una adaptacion estatica del simulador, descrita en el PDF2.
